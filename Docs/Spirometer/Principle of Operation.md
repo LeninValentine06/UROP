@@ -1,6 +1,6 @@
 
 
-A spirometer works by measuring the **airflow** generated during breathing and converting it into **lung volume and flow parameters**.
+A [[Spirometer]] works by measuring the **airflow** generated during breathing and converting it into **lung volume and flow parameters**.
 
 ## Fundamental Measurement
 
