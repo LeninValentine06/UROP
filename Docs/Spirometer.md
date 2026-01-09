@@ -15,7 +15,7 @@ Spirometry is widely used for:
 ## Related Documentation
 
 - [[Principle of Operation]] - How spirometers measure airflow and calculate volumes
-- [[Spirometry Parameters]] - Detailed definitions of FVC, FEV₁, PEF, and other metrics
+- [[Spirometer Parameters]] - Detailed definitions of FVC, FEV₁, PEF, and other metrics
 - [[Spirometry Graphs]] - Volume-Time Curves and Flow-Volume Loops
 
 ---
