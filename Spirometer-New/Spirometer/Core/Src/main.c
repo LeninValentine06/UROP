@@ -19,13 +19,14 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "adc.h"
+#include "stm32f4xx_hal_adc.h"
 #include "usart.h"
 #include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <stdint.h>
-
+#include <stdio.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -35,13 +36,6 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-//If flow exceeds a threshold → exhalation started
-#define SAMPLE_RATE_HZ        100
-#define DT                   (1.0f / SAMPLE_RATE_HZ)
-
-#define FLOW_START_THRESHOLD  0.5f   // L/s
-#define FLOW_END_THRESHOLD    0.2f   // L/s
-#define END_HOLD_TIME_S       1.0f   // flow < threshold for 1 sec
 
 /* USER CODE END PD */
 
@@ -53,23 +47,9 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-typedef enum {
-    SPIRO_IDLE,
-    SPIRO_EXHALING,
-    SPIRO_DONE
-} spiro_state_t;
 
-spiro_state_t spiro_state = SPIRO_IDLE;
-
-float fev1 = 0.0f;
-float fev6 = 0.0f;
-float fvc  = 0.0f;
-float pef  = 0.0f;
-float fev1_fvc = 0.0f;
 uint16_t rawValue;
-uint16_t sample_count = 0;
-uint16_t end_counter = 0;
-
+float flow;
 
 /* USER CODE END PV */
 
@@ -85,7 +65,14 @@ float flowRate(uint16_t rawValue)
     float rawVoltage = ((float)rawValue / 4095.0f) * 3.3f;
     return (rawVoltage * 34.0f) - 26.4f;
 }
-
+int _write(int file, char *ptr, int len)
+{
+    for(int i = 0; i < len; i++)
+    {
+        ITM_SendChar((*ptr++));
+    }
+    return len;
+}
 /* USER CODE END 0 */
 
 /**
@@ -120,74 +107,19 @@ int main(void)
   MX_ADC1_Init();
   MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
-  HAL_ADC_Start(&hadc1);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+    HAL_ADC_Start(&hadc1);
     HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY);
     rawValue = HAL_ADC_GetValue(&hadc1);
-
-    float flow = flowRate(rawValue);   // L/s
-
-    switch (spiro_state)
-    {
-        case SPIRO_IDLE:
-            if (flow > FLOW_START_THRESHOLD)
-            {
-                // Reset everything
-                fev1 = fev6 = fvc = 0.0f;
-                pef = flow;
-                sample_count = 0;
-                end_counter = 0;
-
-                spiro_state = SPIRO_EXHALING;
-            }
-            break;
-
-        case SPIRO_EXHALING:
-            sample_count++;
-
-            // Integrate volume
-            fvc += flow * DT;
-
-            // FEV1: first 1 second
-            if (sample_count <= SAMPLE_RATE_HZ)
-                fev1 += flow * DT;
-
-            // FEV6: first 6 seconds
-            if (sample_count <= (6 * SAMPLE_RATE_HZ))
-                fev6 += flow * DT;
-
-            // PEF
-            if (flow > pef)
-                pef = flow;
-
-            // Detect end of exhalation
-            if (flow < FLOW_END_THRESHOLD)
-            {
-                end_counter++;
-                if (end_counter >= (END_HOLD_TIME_S * SAMPLE_RATE_HZ))
-                {
-                    fev1_fvc = fev1 / fvc;
-                    spiro_state = SPIRO_DONE;
-                }
-            }
-            else
-            {
-                end_counter = 0;
-            }
-            break;
-
-        case SPIRO_DONE:
-            // Results ready:
-            // fev1, fev6, fvc, fev1_fvc, pef
-            break;
-    }
-
-    HAL_Delay(10);   // 100 Hz
+    HAL_ADC_Stop(&hadc1);
+    flow = flowRate(rawValue);   // L/s
+    printf("Raw: %u\tVoltage: %.3fV\tFlow: %.2fL/s\r\n",rawValue, ((float)rawValue/4095.0f)*3.3f, flow);
+    HAL_Delay(100);
 
     /* USER CODE END WHILE */
 
