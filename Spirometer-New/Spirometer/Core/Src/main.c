@@ -19,14 +19,11 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "adc.h"
-#include "stm32f4xx_hal_adc.h"
-#include "usart.h"
 #include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include <stdint.h>
-#include <stdio.h>
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -47,32 +44,28 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-
-uint16_t rawValue;
-float flow;
-
+uint32_t raw_value = 0;
+volatile float flow = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
+float adc_to_slpm(uint32_t adc_value){
+	flow = (51.19f * ((adc_value * 3.3f)/4095) - 18.94);
+	if (flow <= 0.0f ){
+		flow = 0.0f;
+	}
+	else if (flow >= 150){
+		flow = 150.0f;
+	}
+	return flow;
+}
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-float flowRate(uint16_t rawValue)
-{
-    float rawVoltage = ((float)rawValue / 4095.0f) * 3.3f;
-    return (rawVoltage * 34.0f) - 26.4f;
-}
-int _write(int file, char *ptr, int len)
-{
-    for(int i = 0; i < len; i++)
-    {
-        ITM_SendChar((*ptr++));
-    }
-    return len;
-}
+
 /* USER CODE END 0 */
 
 /**
@@ -105,22 +98,17 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_ADC1_Init();
-  MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
+  HAL_ADC_Start(&hadc1);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    HAL_ADC_Start(&hadc1);
-    HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY);
-    rawValue = HAL_ADC_GetValue(&hadc1);
-    HAL_ADC_Stop(&hadc1);
-    flow = flowRate(rawValue);   // L/s
-    printf("Raw: %u\tVoltage: %.3fV\tFlow: %.2fL/s\r\n",rawValue, ((float)rawValue/4095.0f)*3.3f, flow);
-    HAL_Delay(100);
-
+	  HAL_ADC_PollForConversion(&hadc1, 10);
+	  raw_value = HAL_ADC_GetValue(&hadc1);
+	  flow = adc_to_slpm(raw_value);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
