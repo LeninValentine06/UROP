@@ -45,21 +45,22 @@
 
 /* USER CODE BEGIN PV */
 uint32_t raw_value = 0;
-volatile float flow = 0;
+volatile float flow_slpm = 0;
+volatile float flow_lps = 0;  // Liters per second
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
 float adc_to_slpm(uint32_t adc_value){
-	flow = (51.19f * ((adc_value * 3.3f)/4095) - 18.94);
-	if (flow <= 0.0f ){
-		flow = 0.0f;
-	}
-	else if (flow >= 150){
-		flow = 150.0f;
-	}
-	return flow;
+    flow_slpm = (51.19f * ((adc_value * 3.3f)/4095.0f) - 18.94f);
+    if (flow_slpm <= 0.0f ){
+        flow_slpm = 0.0f;
+    }
+    else if (flow_slpm >= 150.0f){
+        flow_slpm = 150.0f;
+    }
+    return flow_slpm;
 }
 /* USER CODE END PFP */
 
@@ -105,10 +106,16 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  HAL_ADC_Start(&hadc1);
-	  HAL_ADC_PollForConversion(&hadc1, 10);
-	  raw_value = HAL_ADC_GetValue(&hadc1);
-	  flow = adc_to_slpm(raw_value);
+	    HAL_ADC_Start(&hadc1);
+	    HAL_ADC_PollForConversion(&hadc1, 10);
+	    raw_value = HAL_ADC_GetValue(&hadc1);
+	    HAL_ADC_Stop(&hadc1);
+
+	    // Get flow in SLPM
+	    flow_slpm = adc_to_slpm(raw_value);
+
+	    // Convert to liters per second
+	    flow_lps = flow_slpm / 60.0f;
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
