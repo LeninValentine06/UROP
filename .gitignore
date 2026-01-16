@@ -1,1 +1,16 @@
 Docs/.obsidian/
+# STM32CubeIDE
+.settings/
+Debug/
+*.launch
+
+# Build artifacts (extra safety)
+*.elf
+*.map
+*.hex
+*.bin
+
+# OS junk
+.DS_Store
+Thumbs.db
+
