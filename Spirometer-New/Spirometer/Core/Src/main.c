@@ -47,6 +47,9 @@
 uint32_t raw_value = 0;
 volatile float flow_slpm = 0;
 volatile float flow_lps = 0;  // Liters per second
+volatile float volume_l = 0;
+
+uint32_t last_sample_time = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -61,6 +64,10 @@ float adc_to_slpm(uint32_t adc_value){
         flow_slpm = 150.0f;
     }
     return flow_slpm;
+}
+
+void process_flow(float flow_lps){
+	volume_l += flow_lps*0.01;
 }
 /* USER CODE END PFP */
 
@@ -100,22 +107,29 @@ int main(void)
   MX_GPIO_Init();
   MX_ADC1_Init();
   /* USER CODE BEGIN 2 */
+  last_sample_time =  HAL_GetTick();
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	    HAL_ADC_Start(&hadc1);
-	    HAL_ADC_PollForConversion(&hadc1, 10);
-	    raw_value = HAL_ADC_GetValue(&hadc1);
-	    HAL_ADC_Stop(&hadc1);
+	  uint32_t current_time = HAL_GetTick();
+	  if ((current_time - last_sample_time) >= 10){
+		    HAL_ADC_Start(&hadc1);
+		    HAL_ADC_PollForConversion(&hadc1, 10);
+		    raw_value = HAL_ADC_GetValue(&hadc1);
+		    HAL_ADC_Stop(&hadc1);
 
-	    // Get flow in SLPM
-	    flow_slpm = adc_to_slpm(raw_value);
+		    // Get flow in SLPM
+		    flow_slpm = adc_to_slpm(raw_value);
 
-	    // Convert to liters per second
-	    flow_lps = flow_slpm / 60.0f;
+		    // Convert to liters per second
+		    flow_lps = flow_slpm / 60.0f;
+		    process_flow(flow_lps);
+		    last_sample_time = current_time;
+	  }
+
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
