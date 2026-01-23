@@ -40,6 +40,7 @@ typedef struct
 /* USER CODE BEGIN PD */
 #define SAMPLE_PERIOD_MS   10u
 #define SAMPLING_TIME_S    0.01f   // 10 ms
+#define EXHALE_THRESHOLD_LPS   0.05f   // detect blowing (~3 LPM)
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -58,6 +59,21 @@ float flow_lps  = 0.0f;
 float volume_l  = 0.0f;
 float flow_offset_slpm = 0.0f;   // auto-calculated zero
 
+uint8_t exhale_active = 0;
+
+uint32_t exhale_start_time = 0;
+float exhale_start_volume = 0;
+
+float fev1_l = 0.0f;
+float fev6_l = 0.0f;
+
+uint8_t fev1_captured = 0;
+uint8_t fev6_captured = 0;
+
+float fvc_l = 0.0f;
+float fev1_fvc_ratio = 0.0f;
+float pef_lps = 0.0f;
+
 
 TrapezoidIntegrator flow_int = {0};
 
@@ -69,6 +85,7 @@ void SystemClock_Config(void);
 float adc_to_slpm(uint32_t adc_value);
 float trapezoidal_update(TrapezoidIntegrator *i, float x_now);
 float calibrate_flow_offset(void);
+void update_fev_parameters(float flow_lps, float volume_l, uint32_t now_ms);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -141,6 +158,8 @@ int main(void)
           /* ---------- integrate ---------- */
           volume_l = trapezoidal_update(&flow_int, flow_lps);
 
+          /* compute FEV metrics */
+          update_fev_parameters(flow_lps, volume_l, now);
 
           last_sample_time = now;
 	  }
@@ -243,6 +262,78 @@ float calibrate_flow_offset(void)
     }
 
     return sum / 200.0f;
+}
+
+void update_fev_parameters(float flow_lps, float volume_l, uint32_t now_ms)
+{
+    static uint32_t low_flow_start = 0;
+
+    /* -------- Detect start of exhalation -------- */
+    if (!exhale_active && flow_lps > EXHALE_THRESHOLD_LPS)
+    {
+        exhale_active = 1;
+
+        exhale_start_time = now_ms;
+        exhale_start_volume = volume_l;
+
+        fev1_captured = 0;
+        fev6_captured = 0;
+
+        /* reset metrics */
+        fvc_l = 0.0f;
+        pef_lps = 0.0f;
+    }
+
+    /* -------- During exhalation -------- */
+    if (exhale_active)
+    {
+        uint32_t elapsed = now_ms - exhale_start_time;
+
+        float exhaled_volume = volume_l - exhale_start_volume;
+
+        /* -------- FVC (max volume) -------- */
+        if (exhaled_volume > fvc_l)
+            fvc_l = exhaled_volume;
+
+        /* -------- PEF (max flow) -------- */
+        if (flow_lps > pef_lps)
+            pef_lps = flow_lps;
+
+        /* -------- FEV1 -------- */
+        if (!fev1_captured && elapsed >= 1000)
+        {
+            fev1_l = exhaled_volume;
+            fev1_captured = 1;
+        }
+
+        /* -------- FEV6 -------- */
+        if (!fev6_captured && elapsed >= 6000)
+        {
+            fev6_l = exhaled_volume;
+            fev6_captured = 1;
+        }
+
+        /* -------- End detection with hysteresis -------- */
+        if (flow_lps < EXHALE_THRESHOLD_LPS)
+        {
+            if (low_flow_start == 0)
+                low_flow_start = now_ms;
+
+            if ((now_ms - low_flow_start) > 300)
+            {
+                exhale_active = 0;
+                low_flow_start = 0;
+
+                /* compute ratio after exhale ends */
+                if (fvc_l > 0.001f)
+                    fev1_fvc_ratio = fev1_l / fvc_l;
+            }
+        }
+        else
+        {
+            low_flow_start = 0;
+        }
+    }
 }
 
 /* USER CODE END 4 */
