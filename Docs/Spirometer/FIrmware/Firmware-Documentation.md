@@ -84,35 +84,57 @@ To convert flow from minutes to seconds:
 $$\text{Flow}_{L/s} = \frac{\text{Flow}_{L/min}}{60}$$
 ## 3. Integration
 
-### Core Formula
 
-This approach uses the **Forward Euler** method, which is ideal for microcontrollers (MCUs) because it avoids complex calculus and relies on simple addition and multiplication.
+## Trapezoidal Integration
 
-$$V[n] = V[n-1] + (\text{Flow}_{L/s} \times T_s)$$
+ Trapezoidal Integration is preferred over Forward Euler Integration method as it considers both previous as well as current input for calculation.
+$$
+\boxed{ y[k] = y[k-1] + \frac{h}{2}(x[k] + x[k-1]) }
+$$
+ where: 
+ - $y[k-1]$ : Previous output (integrated value at sample k-1)
+ - $y[k]$ : Current output (integrated value at sample k)
+ - $x[k]$ : Current input sample (signal value at time k)
+ - $x[k-1]$ : Previous input sample (signal value at time k-1)
+ - $h$ : Sampling time (step size, $h = T_s$)
 
-**Where:**
+```c
+typedef struct
+{
+float x_prev; // previous input (flow)
+float y_prev; // previous output (volume)
+} TrapezoidIntegrator;
 
-- $V[n]$ = Current Volume
-- $V[n-1]$ = Previous Volume
-- $T_s$ = Sampling period in seconds (e.g., if your sensor reads at 100Hz, $T_s = 0.01$)
+float flow_offset_slpm = 0.0f; // auto-calculated zero
+TrapezoidIntegrator flow_int = {0};
+float trapezoidal_update(TrapezoidIntegrator *i, float x_now);
+float calibrate_flow_offset(void);
 
-## To Do
-> [!note] ### Trapezoidal Integration
->
-> Trapezoidal Integration is preferred over Forward Euler Integration method as it considers both previous as well as current input for calculation.
->
-> $$
-> \boxed{ y[k] = y[k-1] + \frac{h}{2}(x[k] + x[k-1]) }
-> $$
->
-> where: 
-> - $y[k-1]$ : Previous output (integrated value at sample k-1)
-> - $y[k]$ : Current output (integrated value at sample k)
-> - $x[k]$ : Current input sample (signal value at time k)
-> - $x[k-1]$ : Previous input sample (signal value at time k-1)
-> - $h$ : Sampling time (step size, $h = T_s$)
+/* Trapezoidal integrator update */
 
+float trapezoidal_update(TrapezoidIntegrator *i, float x_now)
+{
+float y_now = i->y_prev + (SAMPLING_TIME_S * 0.5f) * (x_now + i->x_prev);
+i->x_prev = x_now;
+i->y_prev = y_now;
+return y_now;
+}
 
+float calibrate_flow_offset(void)
+{
+float sum = 0.0f;
+for(int i = 0; i < 200; i++) // 2 seconds @ 10ms
+{
+HAL_ADC_Start(&hadc1);
+HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY);
+uint32_t raw = HAL_ADC_GetValue(&hadc1);
+HAL_ADC_Stop(&hadc1);
+sum += adc_to_slpm(raw);
+HAL_Delay(10);
+}
+return sum / 200.0f;
+}
+```
 
 
 
