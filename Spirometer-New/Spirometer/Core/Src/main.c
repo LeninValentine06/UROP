@@ -24,7 +24,6 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <math.h>
-
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -34,6 +33,11 @@ typedef struct
     float x_prev;   // previous input (flow)
     float y_prev;   // previous output (volume)
 } TrapezoidIntegrator;
+typedef struct {
+    float volume;
+    float flow;
+} FVLPoint;
+
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -41,6 +45,8 @@ typedef struct
 #define SAMPLE_PERIOD_MS   10u
 #define SAMPLING_TIME_S    0.01f   // 10 ms
 #define EXHALE_THRESHOLD_LPS   0.05f   // detect blowing (~3 LPM)
+#define FVL_MAX_POINTS 800   // 8 seconds @ 10ms
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -74,6 +80,8 @@ float fvc_l = 0.0f;
 float fev1_fvc_ratio = 0.0f;
 float pef_lps = 0.0f;
 
+FVLPoint fvl_buffer[FVL_MAX_POINTS];
+uint16_t fvl_index = 0;
 
 TrapezoidIntegrator flow_int = {0};
 
@@ -271,6 +279,7 @@ void update_fev_parameters(float flow_lps, float volume_l, uint32_t now_ms)
     /* -------- Detect start of exhalation -------- */
     if (!exhale_active && flow_lps > EXHALE_THRESHOLD_LPS)
     {
+    	fvl_index = 0;   // reset FVL capture
         exhale_active = 1;
 
         exhale_start_time = now_ms;
@@ -287,6 +296,14 @@ void update_fev_parameters(float flow_lps, float volume_l, uint32_t now_ms)
     /* -------- During exhalation -------- */
     if (exhale_active)
     {
+    	/* -------- Store Flow-Volume loop -------- */
+    	if (fvl_index < FVL_MAX_POINTS)
+    	{
+    	    fvl_buffer[fvl_index].volume = volume_l - exhale_start_volume;
+    	    fvl_buffer[fvl_index].flow   = flow_lps;
+    	    fvl_index++;
+    	}
+
         uint32_t elapsed = now_ms - exhale_start_time;
 
         float exhaled_volume = volume_l - exhale_start_volume;
