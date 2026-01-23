@@ -82,7 +82,7 @@ $$
 To convert flow from minutes to seconds:
 
 $$\text{Flow}_{L/s} = \frac{\text{Flow}_{L/min}}{60}$$
-## Discrete Integration
+## 3. Integration
 
 ### Core Formula
 
@@ -95,3 +95,25 @@ $$V[n] = V[n-1] + (\text{Flow}_{L/s} \times T_s)$$
 - $V[n]$ = Current Volume
 - $V[n-1]$ = Previous Volume
 - $T_s$ = Sampling period in seconds (e.g., if your sensor reads at 100Hz, $T_s = 0.01$)
+
+## To Do
+> [!note] ### Trapezoidal Integration
+>
+> Trapezoidal Integration is preferred over Forward Euler Integration method as it considers both previous as well as current input for calculation.
+>
+> $$
+> \boxed{ y[k] = y[k-1] + \frac{h}{2}(x[k] + x[k-1]) }
+> $$
+>
+> where: 
+> - $y[k-1]$ : Previous output (integrated value at sample k-1)
+> - $y[k]$ : Current output (integrated value at sample k)
+> - $x[k]$ : Current input sample (signal value at time k)
+> - $x[k-1]$ : Previous input sample (signal value at time k-1)
+> - $h$ : Sampling time (step size, $h = T_s$)
+
+
+
+
+
+
