@@ -23,17 +23,23 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include <math.h>
 
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
-
+typedef struct
+{
+    float x_prev;   // previous input (flow)
+    float y_prev;   // previous output (volume)
+} TrapezoidIntegrator;
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+#define SAMPLE_PERIOD_MS   10u
+#define SAMPLING_TIME_S    0.01f   // 10 ms
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -44,31 +50,25 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-uint32_t raw_value = 0;
-volatile float flow_slpm = 0;
-volatile float flow_lps = 0;  // Liters per second
-volatile float volume_l = 0;
-
 uint32_t last_sample_time = 0;
+uint32_t raw_value = 0;
+
+float flow_slpm = 0.0f;
+float flow_lps  = 0.0f;
+float volume_l  = 0.0f;
+float flow_offset_slpm = 0.0f;   // auto-calculated zero
+
+
+TrapezoidIntegrator flow_int = {0};
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
-float adc_to_slpm(uint32_t adc_value){
-    flow_slpm = (51.19f * ((adc_value * 3.3f)/4095.0f) - 18.94f);
-    if (flow_slpm <= 0.0f ){
-        flow_slpm = 0.0f;
-    }
-    else if (flow_slpm >= 150.0f){
-        flow_slpm = 150.0f;
-    }
-    return flow_slpm;
-}
-
-void process_flow(float flow_lps){
-	volume_l += flow_lps*0.01;
-}
+float adc_to_slpm(uint32_t adc_value);
+float trapezoidal_update(TrapezoidIntegrator *i, float x_now);
+float calibrate_flow_offset(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -107,6 +107,7 @@ int main(void)
   MX_GPIO_Init();
   MX_ADC1_Init();
   /* USER CODE BEGIN 2 */
+  flow_offset_slpm = calibrate_flow_offset();
   last_sample_time =  HAL_GetTick();
   /* USER CODE END 2 */
 
@@ -114,20 +115,34 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  uint32_t current_time = HAL_GetTick();
-	  if ((current_time - last_sample_time) >= 10){
-		    HAL_ADC_Start(&hadc1);
-		    HAL_ADC_PollForConversion(&hadc1, 10);
-		    raw_value = HAL_ADC_GetValue(&hadc1);
-		    HAL_ADC_Stop(&hadc1);
+      uint32_t now = HAL_GetTick();
 
-		    // Get flow in SLPM
-		    flow_slpm = adc_to_slpm(raw_value);
+      if ((now - last_sample_time) >= SAMPLE_PERIOD_MS)
+      {
+          /* -------- ADC read -------- */
+          HAL_ADC_Start(&hadc1);
+          HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY);
+          raw_value = HAL_ADC_GetValue(&hadc1);
+          HAL_ADC_Stop(&hadc1);
 
-		    // Convert to liters per second
-		    flow_lps = flow_slpm / 60.0f;
-		    process_flow(flow_lps);
-		    last_sample_time = current_time;
+          /* -------- Flow calculation -------- */
+          flow_slpm = adc_to_slpm(raw_value);
+
+          /* ---------- offset removal ---------- */
+          flow_slpm -= flow_offset_slpm;
+
+          /* ---------- deadband ---------- */
+          if (fabsf(flow_slpm) < 1.0f)   // 1 SLPM noise zone
+              flow_slpm = 0.0f;
+
+          /* ---------- convert ---------- */
+          flow_lps = flow_slpm / 60.0f;
+
+          /* ---------- integrate ---------- */
+          volume_l = trapezoidal_update(&flow_int, flow_lps);
+
+
+          last_sample_time = now;
 	  }
 
     /* USER CODE END WHILE */
@@ -184,6 +199,51 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
+/* Convert ADC -> Standard Liters Per Minute */
+float adc_to_slpm(uint32_t adc_value)
+{
+    float voltage = (adc_value * 3.3f) / 4095.0f;
+
+    float flow = 51.19f * voltage - 18.94f;
+
+    if (flow < 0.0f)   flow = 0.0f;
+    if (flow > 150.0f) flow = 150.0f;
+
+    return flow;
+}
+
+
+/* Trapezoidal integrator update */
+float trapezoidal_update(TrapezoidIntegrator *i, float x_now)
+{
+    float y_now = i->y_prev + (SAMPLING_TIME_S * 0.5f) * (x_now + i->x_prev);
+
+    i->x_prev = x_now;
+    i->y_prev = y_now;
+
+    return y_now;
+}
+
+float calibrate_flow_offset(void)
+{
+    float sum = 0.0f;
+
+    for(int i = 0; i < 200; i++)   // 2 seconds @ 10ms
+    {
+        HAL_ADC_Start(&hadc1);
+        HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY);
+
+        uint32_t raw = HAL_ADC_GetValue(&hadc1);
+
+        HAL_ADC_Stop(&hadc1);
+
+        sum += adc_to_slpm(raw);
+
+        HAL_Delay(10);
+    }
+
+    return sum / 200.0f;
+}
 
 /* USER CODE END 4 */
 
