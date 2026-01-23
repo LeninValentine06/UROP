@@ -75,18 +75,23 @@ $$
 $$
 
 
-# 2. Volume
+## 2. Volume
 
 ### Convert L/min → L/s
 
-FlowL/s=FlowL/min60\text{Flow}_{L/s} = \frac{\text{Flow}_{L/min}}{60}FlowL/s​=60FlowL/min​​
+To convert flow from minutes to seconds:
 
-## Discrete integration (MCU-friendly math)
+$$\text{Flow}_{L/s} = \frac{\text{Flow}_{L/min}}{60}$$
+## Discrete Integration
 
-### Core formula
+### Core Formula
 
-V[n]=V[n−1]+FlowL/s×TsV[n] = V[n-1] + \text{Flow}_{L/s} \times T_sV[n]=V[n−1]+FlowL/s​×Ts​
+This approach uses the **Forward Euler** method, which is ideal for microcontrollers (MCUs) because it avoids complex calculus and relies on simple addition and multiplication.
 
-Where:
+$$V[n] = V[n-1] + (\text{Flow}_{L/s} \times T_s)$$
 
-- `Ts` = sampling period (seconds)
+**Where:**
+
+- $V[n]$ = Current Volume
+- $V[n-1]$ = Previous Volume
+- $T_s$ = Sampling period in seconds (e.g., if your sensor reads at 100Hz, $T_s = 0.01$)
