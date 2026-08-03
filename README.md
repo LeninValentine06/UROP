@@ -1,4 +1,4 @@
-# Resource-Efficient Embedded Spirometer
+# Resource-Efficient Spirometer
 ### Real-Time Respiratory Monitoring & Diagnostic Classification on STM32
 
 This repository implements a **portable, resource-efficient embedded spirometer** for real-time respiratory health monitoring. The system acquires flow data from a biomedical mass flow sensor, performs calibration and noise-filtering, computes lung function parameters compliant with ISO 26782 standards, classifies the diagnostic pattern, and displays the results with real-time graphs on an LCD screen.
